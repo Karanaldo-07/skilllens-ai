@@ -5,7 +5,10 @@ function App() {
   const [jd, setJd] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+  const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "https://skilllens-ai.onrender.com";
+
 
   const handleSubmit = async () => {
     if (!file || !jd) return alert("Upload resume and paste JD");
