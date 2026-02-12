@@ -37,79 +37,123 @@ function App() {
   };
 
   return (
-    <div style={{ padding: "40px", fontFamily: "Arial" }}>
-      <h1>SkillLens AI</h1>
 
-      <input
-        type="file"
-        onChange={(e) => setFile(e.target.files[0])}
-      />
 
-      <br /><br />
+    <div className="min-h-screen bg-gradient-to-br from-[#0f0f0f] to-[#1a1a1a] text-white flex justify-center items-start py-12 px-4">
+      
+      <div className="w-full max-w-3xl bg-white/5 backdrop-blur-lg rounded-2xl shadow-2xl p-8 border border-white/10">
 
-      <textarea
-        placeholder="Paste Job Description..."
-        value={jd}
-        onChange={(e) => setJd(e.target.value)}
-        rows={8}
-        cols={80}
-      />
+        <h1 className="text-4xl font-bold mb-6 text-center">
+          SkillLens <span className="text-yellow-400">AI</span>
+        </h1>
 
-      <br /><br />
+        <div className="space-y-4">
 
-      <button onClick={handleSubmit}>
-        {loading ? "Analyzing..." : "Analyze Resume"}
-      </button>
+          <input
+            type="file"
+            onChange={(e) => setFile(e.target.files[0])}
+            className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-yellow-500 file:text-black hover:file:bg-yellow-400"
+          />
 
-      {result && (
-        <div style={{ marginTop: "30px" }}>
-          <h2>Match Score: {result.match_score}%</h2>
+          <textarea
+            placeholder="Paste Job Description..."
+            rows={6}
+            value={jd}
+            onChange={(e) => setJd(e.target.value)}
+            className="w-full p-4 rounded-lg bg-black/40 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+          />
 
-          <div style={{
-            height: "20px",
-            width: "100%",
-            backgroundColor: "#ddd",
-            borderRadius: "10px",
-            overflow: "hidden",
-            marginBottom: "10px"
-          }}>
-            <div style={{
-              height: "100%",
-              width: `${result.match_score}%`,
-              backgroundColor: result.match_score > 70 ? "green" :
-                              result.match_score > 40 ? "orange" : "red"
-            }} />
-          </div>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="w-full py-3 rounded-lg font-semibold bg-yellow-500 hover:bg-yellow-400 text-black transition duration-200"
+          >
+            {loading ? "Analyzing..." : "Analyze Resume"}
+          </button>
 
-          <p><b>{result.readiness_level}</b></p>
-
-          <h3>Fully Matched</h3>
-          <ul>
-            {result.fully_matched.map((skill, i) => (
-              <li key={i}>{skill}</li>
-            ))}
-          </ul>
-
-          <h3>Partially Matched</h3>
-          <ul>
-            {result.partially_matched.map((skill, i) => (
-              <li key={i}>{skill}</li>
-            ))}
-          </ul>
-
-          <h3>Missing Skills</h3>
-          <ul>
-            {result.fully_missing.map((skill, i) => (
-              <li key={i}>{skill}</li>
-            ))}
-          </ul>
-
-          <h3>Estimated Days to Ready</h3>
-          <p>{result.estimated_days_to_ready} days</p>
         </div>
-      )}
-    </div>
-  );
-}
 
-export default App;
+        {result && (
+          <div className="mt-10">
+
+            <h2 className="text-2xl font-semibold mb-3">
+              Match Score: {result.match_score}%
+            </h2>
+
+            <div className="w-full h-4 bg-gray-700 rounded-full overflow-hidden mb-3">
+              <div
+                className="h-full transition-all duration-500"
+                style={{
+                  width: `${result.match_score}%`,
+                  backgroundColor:
+                    result.match_score > 70
+                      ? "#22c55e"
+                      : result.match_score > 40
+                      ? "#facc15"
+                      : "#ef4444",
+                }}
+              />
+            </div>
+
+            <p className="mb-6 text-gray-400">
+              {result.match_score > 70
+                ? "Strong Fit 🔥"
+                : result.match_score > 40
+                ? "Moderate - Needs Improvement"
+                : "High Risk - Major Skill Gaps"}
+            </p>
+
+            <div className="grid md:grid-cols-3 gap-6">
+
+              <div>
+                <h3 className="font-semibold text-green-400 mb-2">
+                  Fully Matched
+                </h3>
+                <ul className="space-y-1 text-sm text-gray-300">
+                  {result.fully_matched?.map((skill, i) => (
+                    <li key={i}>• {skill}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-yellow-400 mb-2">
+                  Partially Matched
+                </h3>
+                <ul className="space-y-1 text-sm text-gray-300">
+                  {result.partially_matched?.map((skill, i) => (
+                    <li key={i}>• {skill}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-red-400 mb-2">
+                  Missing Skills
+                </h3>
+                <ul className="space-y-1 text-sm text-gray-300">
+                  {result.fully_missing?.map((skill, i) => (
+                    <li key={i}>• {skill}</li>
+                  ))}
+                </ul>
+              </div>
+
+            </div>
+
+            {result.estimated_days_to_ready && (
+              <div className="mt-8 p-4 rounded-lg bg-black/30 border border-gray-700">
+                <h3 className="font-semibold text-yellow-400">
+                  Estimated Days to Ready:
+                </h3>
+                <p className="text-lg mt-1">
+                  {result.estimated_days_to_ready} days
+                </p>
+              </div>
+            )}
+
+          </div>
+        )}
+      </div>
+    </div>
+);
+}
