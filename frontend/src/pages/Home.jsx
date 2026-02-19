@@ -63,7 +63,8 @@ export default function Home() {
         ? { Authorization: `Bearer ${token}` }
         : {};
 
-      const response = await fetch("http://127.0.0.1:8000/analyze/", {
+      const response = await fetch("https://skilllens-ai.onrender.com/analyze/", {
+
         method: "POST",
         headers,
         body: formData,
