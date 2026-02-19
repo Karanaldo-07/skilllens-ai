@@ -33,12 +33,14 @@ def extract_skills(text):
     return found_skills
 
 
+
+
 def calculate_similarity(resume_text, job_description):
-    vectorizer = TfidfVectorizer(stop_words="english")
-    tfidf_matrix = vectorizer.fit_transform([resume_text, job_description])
-    similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])
-    score = similarity[0][0]
-    return float(round(score * 100, 2))
+    vectorizer = TfidfVectorizer()
+    vectors = vectorizer.fit_transform([resume_text, job_description])
+    similarity = cosine_similarity(vectors)[0][1]
+    return round(similarity * 100, 2)
+
 
 def calculate_final_score(resume_text, job_description, resume_skills, jd_skills):
     semantic_score = calculate_similarity(resume_text, job_description)
