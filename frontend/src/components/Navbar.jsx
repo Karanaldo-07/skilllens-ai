@@ -1,34 +1,27 @@
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 export default function Navbar() {
-  const navigate = useNavigate();
-
   return (
-    <div className="flex justify-between items-center px-8 py-4 border-b border-gray-800">
-
-      <h1
-        className="text-xl font-bold cursor-pointer"
-        onClick={() => navigate("/")}
-      >
+    <nav className="relative z-50 flex justify-between items-center px-8 py-4 border-b border-gray-800">
+      <Link to="/" className="text-xl font-bold cursor-pointer">
         SkillLens AI
-      </h1>
+      </Link>
 
-      <div className="flex gap-4">
-        <button
-          onClick={() => navigate("/login")}
-          className="text-gray-300"
+      <div className="flex gap-4 items-center">
+        <Link
+          to="/login"
+          className="text-gray-300 hover:text-white transition-colors"
         >
           Login
-        </button>
+        </Link>
 
-        <button
-          onClick={() => navigate("/register")}
-          className="bg-indigo-600 px-4 py-2 rounded"
+        <Link
+          to="/register"
+          className="bg-indigo-600 px-4 py-2 rounded hover:bg-indigo-500 transition-colors"
         >
           Sign Up
-        </button>
+        </Link>
       </div>
-
-    </div>
+    </nav>
   );
 }
