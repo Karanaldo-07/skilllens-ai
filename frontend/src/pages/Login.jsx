@@ -16,10 +16,13 @@ export default function Login() {
     }
 
     try {
-      const url = `${API_BASE_URL}/login/?email=${encodeURIComponent(email.trim())}&password=${encodeURIComponent(password)}`;
-      const response = await fetch(url, {
+      const response = await fetch(`${API_BASE_URL}/login/`, {
         method: "POST",
-        headers: { Accept: "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ email: email.trim(), password }),
       });
 
       const data = await response.json().catch(() => ({}));
