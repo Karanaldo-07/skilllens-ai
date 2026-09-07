@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
+from pydantic import BaseModel
 
 from skill_engine import SKILL_GROUPS, extract_skills, calculate_final_score
 from roadmap_engine import generate_roadmap
@@ -42,6 +43,11 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login/")
+
+
+class AuthPayload(BaseModel):
+    email: str
+    password: str
 
 
 @app.get("/health")
@@ -201,7 +207,13 @@ async def analyze_resume(
 
 # ================= REGISTER =================
 @app.post("/register/")
-def register(email: str, password: str):
+def register(payload: AuthPayload):
+    email = payload.email.strip().lower()
+    password = payload.password
+
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Email and password are required")
+
     db = SessionLocal()
     try:
         existing_user = db.query(User).filter(User.email == email).first()
@@ -218,7 +230,13 @@ def register(email: str, password: str):
 
 # ================= LOGIN =================
 @app.post("/login/")
-def login(email: str, password: str):
+def login(payload: AuthPayload):
+    email = payload.email.strip().lower()
+    password = payload.password
+
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Email and password are required")
+
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()
