@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, Form, Depends, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, File, UploadFile, Form, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from pydantic import BaseModel
+from xml.sax.saxutils import escape
 
 from skill_engine import SKILL_GROUPS, extract_skills, calculate_final_score
 from roadmap_engine import generate_roadmap
@@ -48,6 +49,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login/")
 class AuthPayload(BaseModel):
     email: str
     password: str
+
+
+@app.get("/")
+def root():
+    return {"status": "ok", "service": "SkillLens AI API"}
 
 
 @app.get("/health")
@@ -290,15 +296,27 @@ def delete_history(
 
 
 # ================= REPORT =================
+def remove_file(path: str):
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
 @app.post("/generate-report/")
 def generate_report(
+    background_tasks: BackgroundTasks,
     match_score: float = Form(...),
     readiness: str = Form(...),
     missing_skills: str = Form(...),
     days: int = Form(...),
     current_user: str = Depends(get_current_user),
 ):
-    file_path = "report.pdf"
+    file_path = os.path.join(UPLOAD_FOLDER, f"report-{uuid.uuid4().hex}.pdf")
+
+    safe_readiness = escape(str(readiness))
+    safe_missing_skills = escape(str(missing_skills)).replace("\n", "<br/>")
 
     doc = SimpleDocTemplate(file_path, pagesize=letter)
     styles = getSampleStyleSheet()
@@ -307,16 +325,23 @@ def generate_report(
     elements.append(Paragraph("SkillLens AI Report", styles["Title"]))
     elements.append(Spacer(1, 12))
     elements.append(Paragraph(f"Match Score: {match_score}%", styles["Normal"]))
-    elements.append(Paragraph(f"Readiness Level: {readiness}", styles["Normal"]))
+    elements.append(Paragraph(f"Readiness Level: {safe_readiness}", styles["Normal"]))
     elements.append(Paragraph(f"Estimated Days: {days}", styles["Normal"]))
     elements.append(Spacer(1, 12))
     elements.append(Paragraph("Missing Skills:", styles["Heading2"]))
-    elements.append(Paragraph(missing_skills, styles["Normal"]))
+    elements.append(Paragraph(safe_missing_skills or "None", styles["Normal"]))
 
-    doc.build(elements)
+    try:
+        doc.build(elements)
+    except Exception:
+        remove_file(file_path)
+        raise
+
+    background_tasks.add_task(remove_file, file_path)
 
     return FileResponse(
         file_path,
         media_type="application/pdf",
         filename="SkillLens_Report.pdf",
+        background=background_tasks,
     )
