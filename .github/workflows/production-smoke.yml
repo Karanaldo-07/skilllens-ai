@@ -1,0 +1,26 @@
+name: Production Smoke Check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - '.github/workflows/production-smoke.yml'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check frontend
+        run: |
+          set -e
+          curl -fsS https://skilllens-ai-henna.vercel.app/ >/dev/null
+          curl -fsS https://skilllens-ai-henna.vercel.app/login >/dev/null
+          curl -fsS https://skilllens-ai-henna.vercel.app/dashboard >/dev/null
+
+      - name: Check backend health
+        run: |
+          set -e
+          curl -fsS https://skilllens-ai.onrender.com/health
