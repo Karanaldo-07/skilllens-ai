@@ -39,10 +39,14 @@ export default function Register() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/register/?email=${encodeURIComponent(email.trim())}&password=${encodeURIComponent(password)}`,
-        { method: "POST", headers: { Accept: "application/json" } }
-      );
+      const response = await fetch(`${API_BASE_URL}/register/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
 
       const data = await response.json().catch(() => ({}));
 
