@@ -2,6 +2,7 @@ from fastapi import FastAPI, File, UploadFile, Form, Depends, HTTPException, Req
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 
@@ -13,23 +14,24 @@ from ai_suggestions import generate_resume_suggestions
 from database import SessionLocal, engine
 from models import Analysis, Base, User
 from auth import hash_password, verify_password, create_access_token
+from config import SECRET_KEY, ALGORITHM, ALLOWED_ORIGINS
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import letter
 
-import shutil
 import os
+import uuid
 from typing import Optional
 
 
-app = FastAPI()
+app = FastAPI(title="SkillLens AI API")
 
 Base.metadata.create_all(bind=engine)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,37 +39,46 @@ app.add_middleware(
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login/")
 
-SECRET_KEY = "supersecretkey"
-ALGORITHM = "HS256"
+
+@app.get("/health")
+def health():
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ok"}
+    finally:
+        db.close()
 
 
 # ================= REQUIRED USER =================
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
+        email = payload.get("sub")
+        if not email:
             raise HTTPException(status_code=401, detail="Invalid token")
         return email
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
-# ================= OPTIONAL USER (NEW) =================
+# ================= OPTIONAL USER =================
 def get_user_optional(request: Request) -> Optional[str]:
-    auth = request.headers.get("Authorization")
+    auth = request.headers.get("Authorization", "")
+    scheme, _, token = auth.partition(" ")
 
-    if not auth:
+    if scheme.lower() != "bearer" or not token:
         return None
 
     try:
-        token = auth.split(" ")[1]
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload.get("sub")
-    except:
+        email = payload.get("sub")
+        return email if email else None
+    except JWTError:
         return None
 
 
@@ -76,168 +87,188 @@ def get_user_optional(request: Request) -> Optional[str]:
 async def analyze_resume(
     file: UploadFile = File(...),
     job_description: str = Form(...),
-    current_user: Optional[str] = Depends(get_user_optional)
+    job_role: Optional[str] = Form(None),
+    current_user: Optional[str] = Depends(get_user_optional),
 ):
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    filename = (file.filename or "").strip()
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF resumes are supported")
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    if file.content_type not in (None, "", "application/pdf", "application/octet-stream"):
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a PDF")
 
-    resume_text = extract_text_from_pdf(file_path)
+    safe_filename = f"{uuid.uuid4().hex}.pdf"
+    file_path = os.path.join(UPLOAD_FOLDER, safe_filename)
+    total_bytes = 0
 
-    resume_skills = extract_skills(resume_text)
-    jd_skills = extract_skills(job_description)
+    try:
+        with open(file_path, "wb") as buffer:
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                total_bytes += len(chunk)
+                if total_bytes > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="Resume must be 10 MB or smaller")
+                buffer.write(chunk)
 
-    fully_matched = []
-    partially_matched = []
-    fully_missing = []
+        if total_bytes == 0:
+            raise HTTPException(status_code=400, detail="Uploaded PDF is empty")
 
-    for jd_skill in jd_skills:
-        if jd_skill in resume_skills:
-            fully_matched.append(jd_skill)
-        else:
-            partial = False
-            for group in SKILL_GROUPS.values():
-                if jd_skill in group:
-                    if any(skill in resume_skills for skill in group):
+        resume_text = extract_text_from_pdf(file_path)
+
+        resume_skills = extract_skills(resume_text)
+        jd_skills = extract_skills(job_description)
+
+        fully_matched = []
+        partially_matched = []
+        fully_missing = []
+
+        for jd_skill in jd_skills:
+            if jd_skill in resume_skills:
+                fully_matched.append(jd_skill)
+            else:
+                partial = False
+                for group in SKILL_GROUPS.values():
+                    if jd_skill in group and any(skill in resume_skills for skill in group):
                         partially_matched.append(jd_skill)
                         partial = True
                         break
-            if not partial:
-                fully_missing.append(jd_skill)
+                if not partial:
+                    fully_missing.append(jd_skill)
 
-    match_score = calculate_final_score(
-        resume_text,
-        job_description,
-        resume_skills,
-        jd_skills
-    )
+        match_score = calculate_final_score(
+            resume_text,
+            job_description,
+            resume_skills,
+            jd_skills,
+        )
 
-    roadmap, total_days = generate_roadmap(fully_missing)
+        roadmap, total_days = generate_roadmap(fully_missing)
 
-    if match_score < 40:
-        readiness = "High Risk - Major skill gaps"
-    elif match_score < 70:
-        readiness = "Moderate - Needs Improvement"
-    elif match_score < 85:
-        readiness = "Strong - Interview Possible"
-    else:
-        readiness = "Interview Ready"
+        if match_score < 40:
+            readiness = "High Risk - Major skill gaps"
+        elif match_score < 70:
+            readiness = "Moderate - Needs Improvement"
+        elif match_score < 85:
+            readiness = "Strong - Interview Possible"
+        else:
+            readiness = "Interview Ready"
 
-    suggestions = generate_resume_suggestions(
-        match_score,
-        fully_missing,
-        partially_matched,
-        resume_skills
-    )
+        suggestions = generate_resume_suggestions(
+            match_score,
+            fully_missing,
+            partially_matched,
+            resume_skills,
+        )
 
-    # ================= SAVE ONLY IF LOGGED IN =================
-    if current_user:
-        db = SessionLocal()
+        if current_user:
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(User.email == current_user).first()
+                if user:
+                    db_analysis = Analysis(
+                        resume_name=filename,
+                        match_score=match_score,
+                        estimated_days=total_days,
+                        user_id=user.id,
+                    )
+                    db.add(db_analysis)
+                    db.commit()
+            finally:
+                db.close()
 
-        user = db.query(User).filter(User.email == current_user).first()
-
-        if user:
-            db_analysis = Analysis(
-                resume_name=file.filename,
-                match_score=match_score,
-                estimated_days=total_days,
-                user_id=user.id
-            )
-
-            db.add(db_analysis)
-            db.commit()
-
-        db.close()
-
-    return {
-        "match_score": match_score,
-        "resume_skills": resume_skills,
-        "fully_matched": fully_matched,
-        "partially_matched": partially_matched,
-        "fully_missing": fully_missing,
-        "estimated_days_to_ready": total_days,
-        "roadmap": roadmap,
-        "readiness_level": readiness,
-        "suggestions": suggestions
-    }
+        return {
+            "match_score": match_score,
+            "resume_skills": resume_skills,
+            "fully_matched": fully_matched,
+            "partially_matched": partially_matched,
+            "fully_missing": fully_missing,
+            "estimated_days_to_ready": total_days,
+            "roadmap": roadmap,
+            "readiness_level": readiness,
+            "suggestions": suggestions,
+            "job_role": job_role,
+        }
+    finally:
+        try:
+            await file.close()
+        except Exception:
+            pass
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
 
 # ================= REGISTER =================
 @app.post("/register/")
 def register(email: str, password: str):
     db = SessionLocal()
+    try:
+        existing_user = db.query(User).filter(User.email == email).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="User already exists")
 
-    existing_user = db.query(User).filter(User.email == email).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="User already exists")
-
-    new_user = User(
-        email=email,
-        password=hash_password(password)
-    )
-
-    db.add(new_user)
-    db.commit()
-    db.close()
-
-    return {"message": "User registered successfully"}
+        new_user = User(email=email, password=hash_password(password))
+        db.add(new_user)
+        db.commit()
+        return {"message": "User registered successfully"}
+    finally:
+        db.close()
 
 
 # ================= LOGIN =================
 @app.post("/login/")
 def login(email: str, password: str):
     db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user or not verify_password(password, user.password):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    user = db.query(User).filter(User.email == email).first()
-
-    if not user or not verify_password(password, user.password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    token = create_access_token({"sub": user.email})
-
-    db.close()
-
-    return {"access_token": token}
+        token = create_access_token({"sub": user.email})
+        return {"access_token": token}
+    finally:
+        db.close()
 
 
 # ================= HISTORY =================
 @app.get("/history/")
 def get_history(current_user: str = Depends(get_current_user)):
     db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == current_user).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
 
-    user = db.query(User).filter(User.email == current_user).first()
-
-    records = db.query(Analysis).filter(
-        Analysis.user_id == user.id
-    ).all()
-
-    db.close()
-    return records
+        return db.query(Analysis).filter(Analysis.user_id == user.id).all()
+    finally:
+        db.close()
 
 
 @app.delete("/history/{analysis_id}")
 def delete_history(
     analysis_id: int,
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_user),
 ):
     db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == current_user).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
 
-    user = db.query(User).filter(User.email == current_user).first()
+        record = db.query(Analysis).filter(
+            Analysis.id == analysis_id,
+            Analysis.user_id == user.id,
+        ).first()
 
-    record = db.query(Analysis).filter(
-        Analysis.id == analysis_id,
-        Analysis.user_id == user.id
-    ).first()
+        if not record:
+            raise HTTPException(status_code=404, detail="Not found")
 
-    if not record:
-        raise HTTPException(status_code=404, detail="Not found")
-
-    db.delete(record)
-    db.commit()
-    db.close()
-
-    return {"message": "Deleted"}
+        db.delete(record)
+        db.commit()
+        return {"message": "Deleted"}
+    finally:
+        db.close()
 
 
 # ================= REPORT =================
@@ -247,7 +278,7 @@ def generate_report(
     readiness: str = Form(...),
     missing_skills: str = Form(...),
     days: int = Form(...),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_user),
 ):
     file_path = "report.pdf"
 
@@ -269,5 +300,5 @@ def generate_report(
     return FileResponse(
         file_path,
         media_type="application/pdf",
-        filename="SkillLens_Report.pdf"
+        filename="SkillLens_Report.pdf",
     )
