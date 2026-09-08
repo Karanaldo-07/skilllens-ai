@@ -22,22 +22,8 @@ function NavbarContent() {
         SkillLens AI
       </a>
 
-      <div className="flex gap-3 sm:gap-4 items-center pointer-events-auto">
-        <a
-          href="/login"
-          className="inline-flex items-center min-h-10 px-2 text-gray-300 hover:text-white transition-colors cursor-pointer pointer-events-auto select-none"
-          style={{ touchAction: "manipulation" }}
-        >
-          Login
-        </a>
-
-        <a
-          href="/register"
-          className="inline-flex items-center min-h-10 px-4 py-2 bg-indigo-600 rounded hover:bg-indigo-500 transition-colors cursor-pointer pointer-events-auto select-none"
-          style={{ touchAction: "manipulation" }}
-        >
-          Sign Up
-        </a>
+      <div className="text-sm text-gray-400 hidden sm:block">
+        Free Resume Analysis
       </div>
     </nav>
   );
