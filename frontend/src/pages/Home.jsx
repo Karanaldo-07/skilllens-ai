@@ -22,8 +22,6 @@ export default function Home() {
   const uploadSectionRef = useRef(null);
   const resultsSectionRef = useRef(null);
 
-  const token = localStorage.getItem("token");
-
   useEffect(() => {
     if (!loading) return;
 
@@ -55,10 +53,8 @@ export default function Home() {
     const loadingToast = toast.loading("AI is analyzing your resume...");
 
     try {
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const response = await fetch(`${API_BASE_URL}/analyze/`, {
         method: "POST",
-        headers,
         body: formData,
       });
 
@@ -390,46 +386,79 @@ export default function Home() {
       }
       addFooter(4);
 
-      doc.save("SkillLens_AI_Professional_Report.pdf");
-      toast.success("Professional PDF downloaded successfully!", { id: loadingToast });
+      doc.save("SkillLens_AI_Resume_Report.pdf");
+      toast.success("PDF report downloaded!", { id: loadingToast });
     } catch (error) {
       console.error("PDF generation error:", error);
-      toast.error("Failed to generate PDF report");
+      toast.error("Could not generate the PDF report.", { id: loadingToast });
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
+    <div className="min-h-screen bg-black text-white overflow-x-hidden">
       <ParticleBg />
       <Navbar />
-      <main>
-        <section className="relative min-h-screen flex items-center justify-center px-4 pt-24 pb-16">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-900/20 to-slate-900 pointer-events-none" />
-          <div className="relative z-10 max-w-6xl mx-auto text-center">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
-              <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight">SkillLens AI</h1>
-              <p className="mt-6 text-lg md:text-2xl text-purple-100 max-w-3xl mx-auto">AI-powered resume analysis and career intelligence.</p>
-            </motion.div>
-          </div>
+      <main className="relative z-10 pt-24">
+        <section className="max-w-6xl mx-auto px-4 py-16 text-center">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+            <p className="text-indigo-400 font-semibold mb-3">AI Career Intelligence</p>
+            <h1 className="text-4xl sm:text-6xl font-bold tracking-tight">Know Your Resume. Know Your Next Move.</h1>
+            <p className="mt-6 max-w-3xl mx-auto text-gray-400 text-base sm:text-lg">Upload your resume, paste a job description, and get an instant skill match, readiness score, learning roadmap, and actionable recommendations.</p>
+          </motion.div>
         </section>
 
         <section ref={uploadSectionRef} className="relative z-10 max-w-5xl mx-auto px-4 pb-20">
-          <UploadBox file={file} setFile={setFile} jd={jd} setJd={setJd} jobRole={jobRole} setJobRole={setJobRole} loading={loading} loadingMessage={loadingMessage} onAnalyze={handleAnalyze} />
+          <UploadBox
+            file={file}
+            setFile={setFile}
+            jd={jd}
+            setJd={setJd}
+            jobRole={jobRole}
+            setJobRole={setJobRole}
+            loading={loading}
+            loadingMessage={loadingMessage}
+            onAnalyze={handleAnalyze}
+          />
         </section>
 
         {result && (
-          <section ref={resultsSectionRef} className="relative z-10 max-w-6xl mx-auto px-4 pb-20">
-            <div className="grid gap-6 md:grid-cols-2">
-              <ScoreCircle score={result.match_score} />
-              <div className="rounded-2xl bg-white/10 backdrop-blur p-6">
-                <h2 className="text-2xl font-bold mb-4">Analysis Results</h2>
-                <p>Readiness: {result.readiness_level}</p>
-                <p className="mt-2">Matched skills: {result.fully_matched?.length || 0}</p>
-                <p className="mt-2">Missing skills: {result.fully_missing?.length || 0}</p>
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <button onClick={handleDownloadPDF} className="rounded-lg bg-purple-600 px-4 py-2 font-semibold hover:bg-purple-500">Download PDF</button>
-                  <button onClick={handleReset} className="rounded-lg border border-white/30 px-4 py-2 font-semibold hover:bg-white/10">Analyze Another</button>
+          <section ref={resultsSectionRef} className="relative z-10 max-w-6xl mx-auto px-4 pb-24">
+            <div className="bg-gray-950/80 border border-gray-800 rounded-2xl p-5 sm:p-8 shadow-2xl">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-5 mb-8">
+                <div>
+                  <p className="text-indigo-400 font-semibold">Analysis Complete</p>
+                  <h2 className="text-3xl font-bold mt-1">Your Resume Intelligence Report</h2>
+                  <p className="text-gray-400 mt-2">No account required. Your analysis is generated for this session.</p>
                 </div>
+                <div className="flex gap-3">
+                  <button onClick={handleDownloadPDF} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 font-semibold">Download PDF</button>
+                  <button onClick={handleReset} className="px-4 py-2 rounded-lg border border-gray-700 hover:bg-gray-900">Analyze Another</button>
+                </div>
+              </div>
+
+              <div className="grid lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-1 bg-black/40 rounded-xl border border-gray-800 p-6 flex flex-col items-center justify-center">
+                  <ScoreCircle score={result.match_score} />
+                  <p className="mt-4 text-center font-semibold">{result.readiness_level}</p>
+                </div>
+
+                <div className="lg:col-span-2 grid sm:grid-cols-2 gap-4">
+                  <div className="bg-black/40 rounded-xl border border-gray-800 p-5"><p className="text-gray-400 text-sm">Matched Skills</p><p className="text-2xl font-bold mt-1">{result.fully_matched?.length || 0}</p></div>
+                  <div className="bg-black/40 rounded-xl border border-gray-800 p-5"><p className="text-gray-400 text-sm">Partial Matches</p><p className="text-2xl font-bold mt-1">{result.partially_matched?.length || 0}</p></div>
+                  <div className="bg-black/40 rounded-xl border border-gray-800 p-5"><p className="text-gray-400 text-sm">Missing Skills</p><p className="text-2xl font-bold mt-1">{result.fully_missing?.length || 0}</p></div>
+                  <div className="bg-black/40 rounded-xl border border-gray-800 p-5"><p className="text-gray-400 text-sm">Estimated Days</p><p className="text-2xl font-bold mt-1">{result.estimated_days_to_ready ?? 0}</p></div>
+                </div>
+              </div>
+
+              <div className="grid lg:grid-cols-3 gap-6 mt-6">
+                <div className="bg-black/40 rounded-xl border border-gray-800 p-5"><h3 className="font-bold text-lg mb-3">Matched</h3><div className="flex flex-wrap gap-2">{(result.fully_matched || []).map((s, i) => <span key={i} className="px-2 py-1 rounded bg-green-500/10 text-green-300 text-sm">{s}</span>)}</div></div>
+                <div className="bg-black/40 rounded-xl border border-gray-800 p-5"><h3 className="font-bold text-lg mb-3">Partial</h3><div className="flex flex-wrap gap-2">{(result.partially_matched || []).map((s, i) => <span key={i} className="px-2 py-1 rounded bg-yellow-500/10 text-yellow-300 text-sm">{s}</span>)}</div></div>
+                <div className="bg-black/40 rounded-xl border border-gray-800 p-5"><h3 className="font-bold text-lg mb-3">Missing</h3><div className="flex flex-wrap gap-2">{(result.fully_missing || []).map((s, i) => <span key={i} className="px-2 py-1 rounded bg-red-500/10 text-red-300 text-sm">{s}</span>)}</div></div>
+              </div>
+
+              <div className="grid lg:grid-cols-2 gap-6 mt-6">
+                <div className="bg-black/40 rounded-xl border border-gray-800 p-5"><h3 className="font-bold text-lg mb-4">Learning Roadmap</h3>{(result.roadmap || []).map((item, i) => <div key={i} className="mb-4"><p className="font-semibold">{i + 1}. {typeof item === "string" ? item : item?.title || item?.skill || `Step ${i + 1}`}</p>{typeof item !== "string" && (item?.description || item?.details) && <p className="text-gray-400 text-sm mt-1">{item.description || item.details}</p>}</div>)}</div>
+                <div className="bg-black/40 rounded-xl border border-gray-800 p-5"><h3 className="font-bold text-lg mb-4">Recommendations</h3>{(result.suggestions || []).map((item, i) => <p key={i} className="text-gray-300 text-sm mb-3">{i + 1}. {typeof item === "string" ? item : item?.text || item?.description || String(item)}</p>)}</div>
               </div>
             </div>
           </section>
